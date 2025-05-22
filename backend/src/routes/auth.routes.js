@@ -34,6 +34,35 @@ router.post(
   authController.register
 );
 
+// Email verification
+router.get('/verify-email/:token', authController.verifyEmail);
+router.post('/resend-verification', authController.resendVerification);
+
+// Password reset
+router.post(
+  '/forgot-password',
+  [
+    body('email')
+      .isEmail()
+      .withMessage('Please provide a valid email address')
+  ],
+  validateRequest,
+  authController.forgotPassword
+);
+
+router.post(
+  '/reset-password/:token',
+  [
+    body('password')
+      .isLength({ min: 8 })
+      .withMessage('Password must be at least 8 characters long')
+      .matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number')
+  ],
+  validateRequest,
+  authController.resetPassword
+);
+
 // Login
 router.post(
   '/login',

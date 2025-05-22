@@ -1,9 +1,11 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import passport from 'passport';
 import * as userModel from '../models/user.model.js';
+import * as emailService from '../services/email.service.js';
 
 // Register a new user
 export const register = async (req, res, next) => {
@@ -20,19 +22,118 @@ export const register = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
     // Create user
     const userId = await userModel.create({
       email,
       password: hashedPassword,
       role,
-      isVerified: false
+      isVerified: false,
+      verificationToken,
+      verificationTokenExpires
     });
+
+    // Send verification email
+    await emailService.sendVerificationEmail(email, verificationToken);
 
     // Return success without sending JWT (require email verification first)
     res.status(201).json({
-      message: 'User registered successfully. Please verify your email.',
+      message: 'Registration successful! Please check your email to verify your account.',
       userId
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Verify email
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const user = await userModel.findByVerificationToken(token);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    if (user.verificationTokenExpires < new Date()) {
+      return res.status(400).json({ error: 'Verification token has expired' });
+    }
+
+    // Update user verification status
+    await userModel.update(user.id, {
+      isVerified: true,
+      verificationToken: null,
+      verificationTokenExpires: null
+    });
+
+    res.status(200).json({ message: 'Email verified successfully. You can now log in.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Request password reset
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await userModel.findByEmail(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save reset token
+    await userModel.update(user.id, {
+      resetPasswordToken: resetToken,
+      resetPasswordTokenExpires: resetTokenExpires
+    });
+
+    // Send reset email
+    await emailService.sendPasswordResetEmail(email, resetToken);
+
+    res.status(200).json({
+      message: 'Password reset instructions have been sent to your email'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reset password
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    const user = await userModel.findByResetToken(token);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    if (user.resetPasswordTokenExpires < new Date()) {
+      return res.status(400).json({ error: 'Reset token has expired' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Update password and clear reset token
+    await userModel.update(user.id, {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordTokenExpires: null
+    });
+
+    res.status(200).json({ message: 'Password has been reset successfully' });
   } catch (error) {
     next(error);
   }
@@ -47,6 +148,11 @@ export const login = async (req, res, next) => {
     const user = await userModel.findByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      return res.status(401).json({ error: 'Please verify your email before logging in' });
     }
 
     // Check password
@@ -83,6 +189,41 @@ export const login = async (req, res, next) => {
         isVerified: user.isVerified,
         twoFactorEnabled: !!user.twoFactorSecret
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Resend verification email
+export const resendVerification = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await userModel.findByEmail(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ error: 'Email is already verified' });
+    }
+
+    // Generate new verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Update user with new verification token
+    await userModel.update(user.id, {
+      verificationToken,
+      verificationTokenExpires
+    });
+
+    // Send verification email
+    await emailService.sendVerificationEmail(email, verificationToken);
+
+    res.status(200).json({
+      message: 'Verification email has been resent'
     });
   } catch (error) {
     next(error);

@@ -14,6 +14,34 @@ export const findByEmail = async (email) => {
   }
 };
 
+// Find user by verification token
+export const findByVerificationToken = async (token) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM users WHERE verification_token = ?',
+      [token]
+    );
+    return rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+    console.error('Error finding user by verification token:', error);
+    throw error;
+  }
+};
+
+// Find user by reset password token
+export const findByResetToken = async (token) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM users WHERE reset_password_token = ?',
+      [token]
+    );
+    return rows.length > 0 ? rows[0] : null;
+  } catch (error) {
+    console.error('Error finding user by reset token:', error);
+    throw error;
+  }
+};
+
 // Find user by ID
 export const findById = async (id) => {
   try {
@@ -31,10 +59,25 @@ export const findById = async (id) => {
 // Create a new user
 export const create = async (userData) => {
   try {
-    const { email, password, role, isVerified } = userData;
+    const { 
+      email, 
+      password, 
+      role, 
+      isVerified, 
+      verificationToken, 
+      verificationTokenExpires 
+    } = userData;
+    
     const [result] = await db.query(
-      'INSERT INTO users (email, password, role, is_verified) VALUES (?, ?, ?, ?)',
-      [email, password, role, isVerified]
+      `INSERT INTO users (
+        email, 
+        password, 
+        role, 
+        is_verified, 
+        verification_token, 
+        verification_token_expires
+      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [email, password, role, isVerified, verificationToken, verificationTokenExpires]
     );
     return result.insertId;
   } catch (error) {
@@ -74,44 +117,26 @@ export const enable2FA = async (userId, secret) => {
 // Update user information
 export const update = async (userId, userData) => {
   try {
-    const { email, password, role, isVerified, twoFactorSecret } = userData;
+    const updates = [];
+    const values = [];
     
-    let query = 'UPDATE users SET ';
-    const params = [];
+    // Build dynamic update query
+    Object.entries(userData).forEach(([key, value]) => {
+      // Convert camelCase to snake_case for database columns
+      const column = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      updates.push(`${column} = ?`);
+      values.push(value);
+    });
     
-    if (email) {
-      query += 'email = ?, ';
-      params.push(email);
-    }
+    values.push(userId); // Add userId for WHERE clause
     
-    if (password) {
-      query += 'password = ?, ';
-      params.push(password);
-    }
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')} 
+      WHERE id = ?
+    `;
     
-    if (role) {
-      query += 'role = ?, ';
-      params.push(role);
-    }
-    
-    if (isVerified !== undefined) {
-      query += 'is_verified = ?, ';
-      params.push(isVerified);
-    }
-    
-    if (twoFactorSecret) {
-      query += 'two_factor_secret = ?, ';
-      params.push(twoFactorSecret);
-    }
-    
-    // Remove trailing comma and space
-    query = query.slice(0, -2);
-    
-    // Add WHERE clause
-    query += ' WHERE id = ?';
-    params.push(userId);
-    
-    await db.query(query, params);
+    await db.query(query, values);
     return true;
   } catch (error) {
     console.error('Error updating user:', error);
