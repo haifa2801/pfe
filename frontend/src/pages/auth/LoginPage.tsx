@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AuthForm from '../../components/auth/AuthForm';
 import FormInput from '../../components/auth/FormInput';
@@ -11,6 +11,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,8 +31,8 @@ const LoginPage: React.FC = () => {
       } else {
         setError('Invalid email or password');
       }
-    } catch (err) {
-      setError('An error occurred during login');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'An error occurred during login');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -39,13 +40,23 @@ const LoginPage: React.FC = () => {
   };
 
   const handleGoogleLogin = () => {
-    // Google OAuth login would be implemented here
-    // This would typically redirect to the OAuth provider
     window.location.href = `${import.meta.env.VITE_API_URL}/auth/google`;
   };
 
+  // Display success message from other pages (e.g., after registration or password reset)
+  const message = location.state?.message;
+
   return (
-    <AuthForm title="Sign in to your account" error={error}>
+    <AuthForm 
+      title="Sign in to your account" 
+      error={error}
+    >
+      {message && (
+        <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-400 text-green-700">
+          {message}
+        </div>
+      )}
+
       <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
         <div>
           <FormInput
@@ -66,6 +77,15 @@ const LoginPage: React.FC = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
+          <div className="flex items-center justify-end">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-500"
+            >
+              Forgot your password?
+            </Link>
+          </div>
         </div>
 
         <div>

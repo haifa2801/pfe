@@ -6,6 +6,9 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 // Pages
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import TwoFactorSetupPage from './pages/auth/TwoFactorSetupPage';
 import TwoFactorVerifyPage from './pages/auth/TwoFactorVerifyPage';
 import Dashboard from './pages/Dashboard';
@@ -20,6 +23,9 @@ function App() {
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/2fa/setup" element={<TwoFactorSetupPage />} />
             <Route path="/2fa/verify" element={<TwoFactorVerifyPage />} />
             
@@ -44,5 +50,3 @@ function App() {
     </AuthProvider>
   );
 }
-
-export default App;
